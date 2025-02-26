@@ -9,11 +9,13 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
-    "lint": "eslint src/**/*.ts*",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "build:lib": "rm -rf dist && tsc -p tsconfig.build.json && tsup src/index.ts --format cjs,esm --no-dts",
     "clean": "rm -rf dist",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build:lib"
   },
   "peerDependencies": {
     "@tanstack/react-table": "^8.0.0",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@tanstack/react-table": "^8.11.8",
+    "@types/node": "22.13.5",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
@@ -48,5 +51,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/cotable"
+  },
+  "dependencies": {
+    "@swc/helpers": "^0.5.15",
+    "next": "^15.1.7"
   }
 }

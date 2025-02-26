@@ -12,7 +12,11 @@ coverage
 dist
 build
 
+# example
+example
+
 .next
+out
 
 # misc
 .DS_Store
