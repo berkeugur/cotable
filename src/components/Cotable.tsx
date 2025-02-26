@@ -15,7 +15,7 @@ import {
   HeaderContext,
   Header,
 } from '@tanstack/react-table';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Table, ConfigProvider, Button, Space, Input, InputNumber, Card, Divider, Checkbox, Empty } from 'antd';
 import { FilterOutlined, ClearOutlined, SearchOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
@@ -24,13 +24,18 @@ import debounce from 'lodash/debounce';
 
 // Nested objeyi düzleştirme fonksiyonu
 const flattenObject = (obj: Record<string, any>, prefix = ''): Record<string, any> => {
+  if (!obj || typeof obj !== 'object') return {};
+
   return Object.keys(obj).reduce((acc: Record<string, any>, key: string) => {
     const propName = prefix ? `${prefix}.${key}` : key;
-    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-      Object.assign(acc, flattenObject(obj[key], propName));
+    
+    if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+      const nested = flattenObject(obj[key], propName);
+      Object.assign(acc, nested);
     } else {
       acc[propName] = obj[key];
     }
+    
     return acc;
   }, {});
 };
@@ -141,8 +146,10 @@ function ValueFilter({ column, data }: { column: Column<any, unknown>, data: any
   const uniqueValues = useMemo(() => {
     const values = new Set<string>();
     data.forEach(row => {
-      const flattenedRow = flattenObject(row as Record<string, any>);
-      const value = flattenedRow[column.id];
+      const value = column.id.includes('.')
+        ? column.id.split('.').reduce((obj: any, key: string) => obj?.[key], row)
+        : (row as any)[column.id];
+
       if (value !== null && value !== undefined) {
         values.add(value.toString());
       }
@@ -281,8 +288,10 @@ function MultipleChoiceFilter({ column, data }: { column: Column<any, unknown>, 
   const options = useMemo(() => {
     const uniqueOptions = new Set<string>();
     data.forEach(row => {
-      const flattenedRow = flattenObject(row as Record<string, any>);
-      const value = flattenedRow[column.id];
+      const value = column.id.includes('.')
+        ? column.id.split('.').reduce((obj: any, key: string) => obj?.[key], row)
+        : (row as any)[column.id];
+
       if (value !== null && value !== undefined) {
         value.toString().split(',').forEach((option: string) => 
           uniqueOptions.add(option.trim())
@@ -340,33 +349,129 @@ export function Cotable<TData, TValue>({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Data değiştiğinde filteredData'yı güncelle
+  useEffect(() => {
+    if (!globalFilter) {
+      setFilteredData(data);
+      setCurrentPage(1);
+      return;
+    }
+
+    const normalizedSearch = normalizeText(globalFilter);
+    const filtered = data.filter((item) => {
+      const flattenedItem = flattenObject(item as Record<string, any>);
+      return Object.entries(flattenedItem).some(([key, value]) => {
+        if (value === null || value === undefined) return false;
+        if (typeof value === 'object') {
+          const nestedStr = JSON.stringify(value);
+          return normalizeText(nestedStr).includes(normalizedSearch);
+        }
+        return normalizeText(value.toString()).includes(normalizedSearch);
+      });
+    });
+
+    setFilteredData(filtered);
+    setCurrentPage(1);
+  }, [data, globalFilter]);
+
   const debouncedSearch = useCallback(
     debounce((searchTerm: string) => {
       if (!searchTerm) {
         setFilteredData(data);
+        setCurrentPage(1);
         return;
       }
 
       const normalizedSearch = normalizeText(searchTerm);
       const filtered = data.filter((item) => {
         const flattenedItem = flattenObject(item as Record<string, any>);
-        return Object.values(flattenedItem).some(
-          (value) => 
-            value !== null && 
-            value !== undefined && 
-            normalizeText(value.toString()).includes(normalizedSearch)
-        );
+        return Object.entries(flattenedItem).some(([key, value]) => {
+          if (value === null || value === undefined) return false;
+          if (typeof value === 'object') {
+            const nestedStr = JSON.stringify(value);
+            return normalizeText(nestedStr).includes(normalizedSearch);
+          }
+          return normalizeText(value.toString()).includes(normalizedSearch);
+        });
       });
+
       setFilteredData(filtered);
+      setCurrentPage(1);
     }, 300),
     [data]
   );
 
-  const handleGlobalSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setGlobalFilter(value);
-    debouncedSearch(value);
-  };
+  // Kolon filtreleri değiştiğinde filtrelenmiş verileri güncelle
+  useEffect(() => {
+    let newFilteredData = data;
+
+    // Her bir kolon filtresi için filtreleme uygula
+    columnFilters.forEach(filter => {
+      const column = table.getColumn(filter.id);
+      if (!column) return;
+
+      newFilteredData = newFilteredData.filter(item => {
+        const value = filter.id.includes('.')
+          ? filter.id.split('.').reduce((obj: any, key: string) => obj?.[key], item)
+          : (item as any)[filter.id];
+
+        if (value === null || value === undefined || value === '') return false;
+
+        const filterFn = column.getFilterFn();
+        if (!filterFn) return true;
+
+        const row = {
+          id: (item as any).id?.toString() || Math.random().toString(36).substr(2, 9),
+          index: 0,
+          original: item,
+          depth: 0,
+          getValue: () => value,
+          getUniqueValues: () => new Set(),
+          renderValue: () => value,
+          subRows: [],
+          getParentRow: () => null,
+          getLeafRows: () => [],
+          originalSubRows: [],
+          getAllCells: () => [],
+          getIsSelected: () => false,
+          getIsGrouped: () => false,
+          getCanExpand: () => false,
+          getIsExpanded: () => false,
+          toggleExpanded: () => {},
+          getVisibleCells: () => [],
+          _getAllVisibleCells: () => [],
+          getCenterVisibleCells: () => [],
+          getLeftVisibleCells: () => [],
+          getRightVisibleCells: () => [],
+          getParentRows: () => [],
+          getCanPin: () => false,
+          getIsPinned: () => false,
+          getPinnedIndex: () => 0,
+          getIsAllParentsExpanded: () => true,
+          getIsFirstChild: () => false,
+          getIsLastChild: () => false,
+          getPrePinnedIndex: () => 0,
+          getPostPinnedIndex: () => 0,
+          getIsAllParentsFolded: () => false,
+          getIsFolded: () => false,
+          toggleFolded: () => {},
+          getIsAllParentsFiltered: () => false,
+          getIsFiltered: () => false,
+          _getAllVisibleCellsById: () => ({})
+        } as unknown as Row<any>;
+
+        return filterFn(
+          row,
+          filter.id,
+          filter.value,
+          () => {}
+        );
+      });
+    });
+
+    setFilteredData(newFilteredData);
+    setCurrentPage(1);
+  }, [columnFilters, data]);
 
   const table = useReactTable({
     data: filteredData,
@@ -424,10 +529,16 @@ export function Cotable<TData, TValue>({
   });
 
   const antData = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredData.slice(startIndex, endIndex);
-  }, [filteredData, currentPage, pageSize]);
+    return filteredData.map((item: any) => {
+      const flattenedItem = flattenObject(item);
+      const key = item.id || Math.random().toString(36).substr(2, 9);
+      return {
+        key,
+        ...flattenedItem,
+        original: item
+      };
+    });
+  }, [filteredData]);
 
   const antColumns = table.getAllColumns().map((column) => {
     const header = table.getHeaderGroups()
@@ -450,30 +561,41 @@ export function Cotable<TData, TValue>({
       sorter: column.getCanSort(),
       render: (text: any, record: any) => {
         const cell = column.columnDef.cell;
-        const row = table.getRowModel().rows.find(r => r.original === record);
-        if (!row) return null;
-
+        const value = column.id.includes('.')
+          ? column.id.split('.').reduce((obj, key) => obj?.[key], record.original)
+          : record[column.id];
+        
         if (typeof cell === 'function') {
-          return flexRender(cell, {
+          const row = {
+            id: record.key,
+            index: 0,
+            original: record.original || record,
+            getValue: () => value,
+            renderValue: () => value,
+          };
+
+          const cellContext = {
             table,
             row,
             column,
-            getValue: () => row.getValue(column.id),
-            renderValue: () => row.getValue(column.id),
+            getValue: () => value,
+            renderValue: () => value,
             cell: {
-              id: `${row.id}_${column.id}`,
-              getValue: () => row.getValue(column.id),
+              id: `${record.key}_${column.id}`,
+              getValue: () => value,
               row,
               column,
-              getContext: () => ({}),
-              renderValue: () => row.getValue(column.id),
+              getContext: () => cellContext,
+              renderValue: () => value,
               getIsAggregated: () => false,
               getIsGrouped: () => false,
               getIsPlaceholder: () => false,
             }
-          } as CellContext<TData, unknown>);
+          } as unknown as CellContext<TData, unknown>;
+
+          return flexRender(cell, cellContext);
         }
-        return row.getValue(column.id);
+        return value;
       }
     };
 
@@ -563,6 +685,7 @@ export function Cotable<TData, TValue>({
   const tableProps: TableProps<any> = {
     columns: antColumns,
     dataSource: antData,
+    rowKey: (record: any) => record.key || record.id || Math.random().toString(36).substr(2, 9),
     title: () => (
       <Space className="w-full justify-between">
         {showGlobalSearch && (
@@ -570,7 +693,10 @@ export function Cotable<TData, TValue>({
             placeholder="Tüm alanlarda ara..."
             prefix={<SearchOutlined />}
             value={globalFilter}
-            onChange={handleGlobalSearch}
+            onChange={e => {
+              setGlobalFilter(e.target.value);
+              debouncedSearch(e.target.value);
+            }}
             allowClear
             className="w-72"
           />
