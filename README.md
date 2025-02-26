@@ -1,15 +1,23 @@
 # Cotable
 
-Modern ve kullanışlı bir React tablo kütüphanesi. TanStack Table (React Table v8) üzerine inşa edilmiş, TypeScript ile yazılmış, sıralama, filtreleme ve sayfalama özellikleri içeren bir tablo bileşeni.
+Cotable, React ve TypeScript ile geliştirilmiş, TanStack Table ve Ant Design tabanlı, güçlü ve özelleştirilebilir bir tablo bileşenidir.
 
 ## Özellikler
 
-- 🔍 Sütun bazlı filtreleme
-- 🔄 Sıralama
-- 📄 Sayfalama
-- 💅 Özelleştirilebilir stil
-- 📱 Responsive tasarım
-- 🎯 TypeScript desteği
+- 🔍 Gelişmiş Filtreleme Seçenekleri
+  - Çoklu Seçim Filtresi (multiSelect)
+  - Metin Arama Filtresi (searchFilter)
+  - Sayısal Aralık Filtresi (numberRange)
+  - Özel Seçim Filtresi (multipleChoiceFilter)
+- 📊 Akıllı Sıralama
+- 📑 Gelişmiş Sayfalama
+  - Sayfa Başına Kayıt Sayısı Seçimi
+  - Toplam Kayıt Gösterimi
+- 🎨 Ant Design Tema Desteği
+- 🌍 Türkçe Dil Desteği
+- 💪 TypeScript ile Tam Tip Güvenliği
+- 🔄 Otomatik Filtre Tipi Belirleme
+- 🧹 Toplu Filtre Temizleme
 
 ## Kurulum
 
@@ -17,43 +25,50 @@ Modern ve kullanışlı bir React tablo kütüphanesi. TanStack Table (React Tab
 npm install cotable
 # veya
 yarn add cotable
-# veya
-pnpm add cotable
 ```
 
 ## Kullanım
 
 ```tsx
 import { Cotable } from 'cotable';
-import { ColumnDef } from '@tanstack/react-table';
 
-type Person = {
-  id: number;
-  firstName: string;
-  lastName: string;
-  age: number;
-};
+// Tablo verisi
+const data = [
+  { id: 1, name: 'Ahmet', age: 25, city: 'İstanbul' },
+  // ...
+];
 
-const columns: ColumnDef<Person>[] = [
+// Sütun tanımlamaları
+const columns = [
   {
-    accessorKey: 'firstName',
-    header: 'Ad',
-  },
-  {
-    accessorKey: 'lastName',
-    header: 'Soyad',
+    accessorKey: 'name',
+    header: 'İsim',
+    meta: {
+      isSearchFilter: true // Metin araması için
+    }
   },
   {
     accessorKey: 'age',
     header: 'Yaş',
+    meta: {
+      isNumberRange: true // Sayısal aralık filtresi için
+    }
   },
+  {
+    accessorKey: 'tags',
+    header: 'Etiketler',
+    meta: {
+      isMultipleChoiceFilter: true // Çoklu seçim filtresi için
+    }
+  },
+  {
+    accessorKey: 'city',
+    header: 'Şehir',
+    enableColumnFilter: true // Standart çoklu seçim filtresi için
+  }
 ];
 
-const data: Person[] = [
-  { id: 1, firstName: 'Ahmet', lastName: 'Yılmaz', age: 25 },
-  { id: 2, firstName: 'Mehmet', lastName: 'Kaya', age: 30 },
-];
-
+// Bileşen kullanımı
 function App() {
   return (
     <Cotable
@@ -61,20 +76,71 @@ function App() {
       data={data}
       showFilters={true}
       showPagination={true}
+      filterStyle="popover"
     />
   );
 }
 ```
 
+## Filtre Türleri
+
+### 1. Metin Arama Filtresi (searchFilter)
+- Anlık arama yapabilme
+- Büyük/küçük harf duyarsız arama
+- Otomatik temizleme butonu
+- Prefix olarak arama ikonu
+
+### 2. Sayısal Aralık Filtresi (numberRange)
+- Minimum ve maksimum değer girişi
+- Tek yönlü filtreleme imkanı (sadece min veya sadece max)
+- Sayısal değer kontrolü
+- InputNumber bileşeni ile kolay giriş
+
+### 3. Çoklu Seçim Filtresi (multipleChoiceFilter)
+- Virgülle ayrılmış değerleri otomatik seçeneklere dönüştürme
+- Çoklu seçim yapabilme
+- Checkbox grubu ile kolay seçim
+- Otomatik değer ayrıştırma
+
+### 4. Standart Çoklu Seçim Filtresi (multiSelect)
+- Benzersiz değerlerden otomatik seçenek oluşturma
+- Tümünü seç/hiçbirini seçme butonları
+- Seçenekler arasında anlık arama
+- Kaydırılabilir liste görünümü
+- Seçenek bulunamadığında özel mesaj
+
 ## Props
 
 | Prop | Tip | Varsayılan | Açıklama |
 |------|-----|------------|-----------|
-| columns | `ColumnDef<TData, TValue>[]` | Gerekli | Tablo sütunlarının tanımları |
-| data | `TData[]` | Gerekli | Tablo verileri |
+| columns | `ColumnDef<TData, TValue>[]` | - | Tablo sütunlarının tanımları |
+| data | `TData[]` | - | Tablo verileri |
 | showFilters | `boolean` | `true` | Filtreleme özelliğinin gösterilip gösterilmeyeceği |
 | showPagination | `boolean` | `true` | Sayfalama özelliğinin gösterilip gösterilmeyeceği |
 | className | `string` | `''` | Ek CSS sınıfları |
+| filterStyle | `'popover' \| 'inline'` | `'inline'` | Filtre stili |
+
+## Sütun Meta Özellikleri
+
+| Özellik | Tip | Açıklama | Otomatik Filtre |
+|---------|-----|-----------|-----------------|
+| isNumberRange | `boolean` | Sayısal aralık filtresi kullanımı | inNumberRange |
+| isSearchFilter | `boolean` | Metin arama filtresi kullanımı | searchFilter |
+| isMultipleChoiceFilter | `boolean` | Çoklu seçim filtresi kullanımı | multipleChoiceFilter |
+| - | - | Standart sütun | multiSelect |
+
+## Özelleştirme
+
+### CSS Sınıfları
+- `.cotable-wrapper`: Ana tablo konteyneri
+- `.scrollable-content`: Kaydırılabilir filtre listesi
+- `.checkbox-item`: Filtre seçenek öğesi
+
+### Stil Özelleştirme
+- Özel scrollbar tasarımı
+- Hover efektleri
+- Responsive tasarım
+- Ant Design tema desteği
 
 ## Geliştirme
 

@@ -1,5 +1,6 @@
 import { Column } from '@tanstack/react-table';
 import { useState } from 'react';
+import { InputNumber, Space } from 'antd';
 
 export interface RangeFilterValue {
   min?: number;
@@ -12,37 +13,44 @@ interface RangeFilterProps {
 }
 
 export function RangeFilter({ column, placeholder }: RangeFilterProps) {
-  const [min, setMin] = useState<string>('');
-  const [max, setMax] = useState<string>('');
+  const [min, setMin] = useState<number | null>(null);
+  const [max, setMax] = useState<number | null>(null);
 
-  const handleMinChange = (value: string) => {
+  const handleMinChange = (value: number | null) => {
     setMin(value);
-    const newRange = { min: value ? Number(value) : undefined, max: max ? Number(max) : undefined };
+    const newRange = { min: value ?? undefined, max: max ?? undefined };
     column.setFilterValue(newRange);
   };
 
-  const handleMaxChange = (value: string) => {
+  const handleMaxChange = (value: number | null) => {
     setMax(value);
-    const newRange = { min: min ? Number(min) : undefined, max: value ? Number(value) : undefined };
+    const newRange = { min: min ?? undefined, max: value ?? undefined };
     column.setFilterValue(newRange);
   };
 
   return (
-    <div className="flex gap-2">
-      <input
-        type="number"
-        value={min}
-        onChange={(e) => handleMinChange(e.target.value)}
-        placeholder="Min"
-        className="w-20 rounded border p-1 text-sm"
-      />
-      <input
-        type="number"
-        value={max}
-        onChange={(e) => handleMaxChange(e.target.value)}
-        placeholder="Max"
-        className="w-20 rounded border p-1 text-sm"
-      />
-    </div>
+    <Space direction="vertical" size="middle" className="w-full">
+      <div>
+        <div className="mb-1 text-xs text-gray-500">Minimum Değer</div>
+        <InputNumber
+          value={min}
+          onChange={handleMinChange}
+          placeholder="En az"
+          className="w-full"
+          size="middle"
+        />
+      </div>
+
+      <div>
+        <div className="mb-1 text-xs text-gray-500">Maksimum Değer</div>
+        <InputNumber
+          value={max}
+          onChange={handleMaxChange}
+          placeholder="En çok"
+          className="w-full"
+          size="middle"
+        />
+      </div>
+    </Space>
   );
 } 
