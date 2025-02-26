@@ -8,8 +8,87 @@ import {
   ColumnFiltersState,
   getFilteredRowModel,
   getPaginationRowModel,
+  Column,
+  FilterFn,
 } from '@tanstack/react-table';
 import { useState } from 'react';
+
+declare module '@tanstack/table-core' {
+  interface ColumnMeta<TData extends unknown, TValue> {
+    isNumberRange?: boolean;
+  }
+
+  interface FilterMeta {
+    numberRange: 'numberRange';
+  }
+
+  interface FilterFns {
+    numberRange: FilterFn<any>;
+    inNumberRange: FilterFn<any>;
+  }
+}
+
+interface RangeFilterValue {
+  min?: number;
+  max?: number;
+}
+
+interface RangeFilterProps {
+  column: Column<any, unknown>;
+  placeholder?: string;
+}
+
+function RangeFilter({ column, placeholder }: RangeFilterProps) {
+  const [min, setMin] = useState<string>('');
+  const [max, setMax] = useState<string>('');
+
+  const handleMinChange = (value: string) => {
+    setMin(value);
+    const newRange = { min: value ? Number(value) : undefined, max: max ? Number(max) : undefined };
+    column.setFilterValue(newRange);
+  };
+
+  const handleMaxChange = (value: string) => {
+    setMax(value);
+    const newRange = { min: min ? Number(min) : undefined, max: value ? Number(value) : undefined };
+    column.setFilterValue(newRange);
+  };
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="number"
+        value={min}
+        onChange={(e) => handleMinChange(e.target.value)}
+        placeholder="Min"
+        className="w-20 rounded border p-1 text-sm"
+      />
+      <input
+        type="number"
+        value={max}
+        onChange={(e) => handleMaxChange(e.target.value)}
+        placeholder="Max"
+        className="w-20 rounded border p-1 text-sm"
+      />
+    </div>
+  );
+}
+
+export const numberRangeFilter: FilterFn<any> = (row, columnId, filterValue: RangeFilterValue) => {
+  const value = row.getValue(columnId) as number;
+  const { min, max } = filterValue;
+
+  if (min !== undefined && max !== undefined) {
+    return value >= min && value <= max;
+  }
+  if (min !== undefined) {
+    return value >= min;
+  }
+  if (max !== undefined) {
+    return value <= max;
+  }
+  return true;
+};
 
 export interface CotableProps<TData, TValue> {
   /** Tablo sütunlarının tanımları */
@@ -47,6 +126,10 @@ export function Cotable<TData, TValue>({
       sorting,
       columnFilters,
     },
+    filterFns: {
+      numberRange: numberRangeFilter,
+      inNumberRange: numberRangeFilter,
+    },
   });
 
   return (
@@ -80,19 +163,23 @@ export function Cotable<TData, TValue>({
                         }[header.column.getIsSorted() as string] ?? null}
                       </div>
                     )}
-                    {showFilters && header.column.getCanFilter() ? (
+                    {showFilters && header.column.getCanFilter() && (
                       <div className="cotable-filter mt-2">
-                        <input
-                          type="text"
-                          value={(header.column.getFilterValue() as string) ?? ''}
-                          onChange={(e) =>
-                            header.column.setFilterValue(e.target.value)
-                          }
-                          className="cotable-filter-input w-full rounded border p-1 text-sm"
-                          placeholder={`Filtrele...`}
-                        />
+                        {header.column.columnDef.meta?.isNumberRange ? (
+                          <RangeFilter column={header.column} />
+                        ) : (
+                          <input
+                            type="text"
+                            value={(header.column.getFilterValue() as string) ?? ''}
+                            onChange={(e) =>
+                              header.column.setFilterValue(e.target.value)
+                            }
+                            className="cotable-filter-input w-full rounded border p-1 text-sm"
+                            placeholder={`Filtrele... xx`}
+                          />
+                        )}
                       </div>
-                    ) : null}
+                    )}
                   </th>
                 ))}
               </tr>
