@@ -123,7 +123,7 @@ export const numberRangeFilter: FilterFn<any> = (row, columnId, filterValue: Ran
   return true;
 };
 
-export interface CotableProps<TData, TValue> {
+export interface CotableProps<TData = any, TValue = unknown> {
   /** Tablo sütunlarının tanımları */
   columns: Array<ColumnDef<TData, TValue> & { filterFn?: CotableFilterType }>;
   /** Tablo verileri */
@@ -138,6 +138,7 @@ export interface CotableProps<TData, TValue> {
   filterStyle?: 'popover' | 'inline';
   /** Global arama özelliğinin gösterilip gösterilmeyeceği */
   showGlobalSearch?: boolean;
+
 }
 
 function ValueFilter({ column, data }: { column: Column<any, unknown>, data: any[] }) {
@@ -340,6 +341,7 @@ export function Cotable<TData, TValue>({
   className = '',
   filterStyle = 'inline',
   showGlobalSearch = true,
+
 }: CotableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -593,7 +595,16 @@ export function Cotable<TData, TValue>({
             }
           } as unknown as CellContext<TData, unknown>;
 
-          return flexRender(cell, cellContext);
+          return flexRender(cell, {
+            ...cellContext,
+            table: {
+              ...table,
+              options: {
+                ...table.options,
+               
+              },
+            },
+          });
         }
         return value;
       }
