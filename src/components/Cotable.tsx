@@ -21,6 +21,7 @@ import { FilterOutlined, ClearOutlined, SearchOutlined } from '@ant-design/icons
 import type { TableProps } from 'antd';
 import trTR from 'antd/locale/tr_TR';
 import debounce from 'lodash/debounce';
+import React from 'react';
 
 // Nested objeyi düzleştirme fonksiyonu
 const flattenObject = (obj: Record<string, any>, prefix = ''): Record<string, any> => {
@@ -141,7 +142,7 @@ export interface CotableProps<TData = any, TValue = unknown> {
 
 }
 
-function ValueFilter({ column, data }: { column: Column<any, unknown>, data: any[] }) {
+function ValueFilter({ column, data, table }: { column: Column<any, unknown>, data: any[], table: any }) {
   const [searchText, setSearchText] = useState('');
   
   const uniqueValues = useMemo(() => {
@@ -152,11 +153,34 @@ function ValueFilter({ column, data }: { column: Column<any, unknown>, data: any
         : (row as any)[column.id];
 
       if (value !== null && value !== undefined) {
-        values.add(value.toString());
+        // Cell render fonksiyonu varsa, onun sonucunu kullan
+        if (column.columnDef.cell && typeof column.columnDef.cell === 'function') {
+          const cellContext = {
+            getValue: () => value,
+            row: { original: row },
+            column,
+            table,
+            renderValue: () => value,
+          } as any;
+          
+          const renderedValue = column.columnDef.cell(cellContext);
+          if (React.isValidElement(renderedValue) && 'props' in renderedValue && 
+              typeof renderedValue.props === 'object' && renderedValue.props !== null && 
+              'children' in renderedValue.props) {
+            const children = renderedValue.props.children;
+            if (children !== null && children !== undefined) {
+              values.add(children.toString());
+            }
+          } else if (renderedValue !== null && renderedValue !== undefined) {
+            values.add(renderedValue.toString());
+          }
+        } else {
+          values.add(value.toString());
+        }
       }
     });
     return Array.from(values).sort();
-  }, [data, column.id]);
+  }, [data, column.id, column.columnDef.cell, table]);
 
   const filteredValues = uniqueValues.filter(value => 
     value.toLowerCase().includes(searchText.toLowerCase())
@@ -283,24 +307,48 @@ function SearchFilter({ column }: { column: Column<any, unknown> }) {
   );
 }
 
-function MultipleChoiceFilter({ column, data }: { column: Column<any, unknown>, data: any[] }) {
+function MultipleChoiceFilter({ column, data, table }: { column: Column<any, unknown>, data: any[], table: any }) {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   
   const options = useMemo(() => {
     const uniqueOptions = new Set<string>();
+    
     data.forEach(row => {
       const value = column.id.includes('.')
         ? column.id.split('.').reduce((obj: any, key: string) => obj?.[key], row)
         : (row as any)[column.id];
 
       if (value !== null && value !== undefined) {
-        value.toString().split(',').forEach((option: string) => 
-          uniqueOptions.add(option.trim())
-        );
+        // Cell render fonksiyonu varsa, onun sonucunu kullan
+        if (column.columnDef.cell && typeof column.columnDef.cell === 'function') {
+          const cellContext = {
+            getValue: () => value,
+            row: { original: row },
+            column,
+            table,
+            renderValue: () => value,
+          } as any;
+          
+          const renderedValue = column.columnDef.cell(cellContext);
+          if (React.isValidElement(renderedValue) && 'props' in renderedValue && 
+              typeof renderedValue.props === 'object' && renderedValue.props !== null && 
+              'children' in renderedValue.props) {
+            const children = renderedValue.props.children;
+            if (children !== null && children !== undefined) {
+              uniqueOptions.add(children.toString());
+            }
+          } else if (renderedValue !== null && renderedValue !== undefined) {
+            uniqueOptions.add(renderedValue.toString());
+          }
+        } else {
+          value.toString().split(',').forEach((option: string) => 
+            uniqueOptions.add(option.trim())
+          );
+        }
       }
     });
     return Array.from(uniqueOptions).sort();
-  }, [data, column.id]);
+  }, [data, column.id, column.columnDef.cell, table]);
 
   const handleChange = (values: string[]) => {
     setSelectedOptions(values);
@@ -505,24 +553,87 @@ export function Cotable<TData, TValue>({
       numberRange: numberRangeFilter,
       inNumberRange: numberRangeFilter,
       multiSelect: (row: Row<any>, columnId: string, filterValue: string[]) => {
+        const column = table.getColumn(columnId);
         const value = row.getValue(columnId);
+        let displayValue = value;
+
+        // Cell render fonksiyonu varsa, onun sonucunu kullan
+        if (column?.columnDef.cell && typeof column.columnDef.cell === 'function') {
+          const cellContext = {
+            getValue: () => value,
+            row,
+            column,
+            table,
+            renderValue: () => value,
+          } as any;
+          
+          const renderedValue = column.columnDef.cell(cellContext);
+          if (React.isValidElement(renderedValue) && 'props' in renderedValue && typeof renderedValue.props === 'object' && renderedValue.props !== null && 'children' in renderedValue.props) {
+            displayValue = renderedValue.props.children;
+          } else {
+            displayValue = renderedValue;
+          }
+        }
+
         if (!Array.isArray(filterValue)) return true;
         if (filterValue.length === 0) return true;
-        if (value === null || value === undefined) return false;
-        return filterValue.includes(value.toString());
+        if (displayValue === null || displayValue === undefined) return false;
+        return filterValue.includes(displayValue.toString());
       },
       searchFilter: (row: Row<any>, columnId: string, filterValue: string) => {
+        const column = table.getColumn(columnId);
         const value = row.getValue(columnId);
+        let displayValue = value;
+
+        // Cell render fonksiyonu varsa, onun sonucunu kullan
+        if (column?.columnDef.cell && typeof column.columnDef.cell === 'function') {
+          const cellContext = {
+            getValue: () => value,
+            row,
+            column,
+            table,
+            renderValue: () => value,
+          } as any;
+          
+          const renderedValue = column.columnDef.cell(cellContext);
+          if (React.isValidElement(renderedValue) && 'props' in renderedValue && typeof renderedValue.props === 'object' && renderedValue.props !== null && 'children' in renderedValue.props) {
+            displayValue = renderedValue.props.children;
+          } else {
+            displayValue = renderedValue;
+          }
+        }
+
         if (!filterValue) return true;
-        if (value === null || value === undefined) return false;
-        return normalizeText(value.toString()).includes(normalizeText(filterValue));
+        if (displayValue === null || displayValue === undefined) return false;
+        return normalizeText(displayValue.toString()).includes(normalizeText(filterValue));
       },
       multipleChoiceFilter: (row: Row<any>, columnId: string, filterValue: string[]) => {
+        const column = table.getColumn(columnId);
         const value = row.getValue(columnId);
+        let displayValue = value;
+
+        // Cell render fonksiyonu varsa, onun sonucunu kullan
+        if (column?.columnDef.cell && typeof column.columnDef.cell === 'function') {
+          const cellContext = {
+            getValue: () => value,
+            row,
+            column,
+            table,
+            renderValue: () => value,
+          } as any;
+          
+          const renderedValue = column.columnDef.cell(cellContext);
+          if (React.isValidElement(renderedValue) && 'props' in renderedValue && typeof renderedValue.props === 'object' && renderedValue.props !== null && 'children' in renderedValue.props) {
+            displayValue = renderedValue.props.children;
+          } else {
+            displayValue = renderedValue;
+          }
+        }
+
         if (!Array.isArray(filterValue)) return true;
         if (filterValue.length === 0) return true;
-        if (value === null || value === undefined) return false;
-        const normalizedValue = normalizeText(value.toString());
+        if (displayValue === null || displayValue === undefined) return false;
+        const normalizedValue = normalizeText(displayValue.toString());
         return filterValue.some(filter => 
           normalizedValue.includes(normalizeText(filter))
         );
@@ -653,7 +764,7 @@ export function Cotable<TData, TValue>({
               </div>
             ) : column.columnDef.meta?.isMultipleChoiceFilter ? (
               <div className="space-y-3">
-                <MultipleChoiceFilter column={column} data={data} />
+                <MultipleChoiceFilter column={column} data={data} table={table} />
                 <Divider className="my-2" />
                 <Button
                   size="small"
@@ -667,7 +778,7 @@ export function Cotable<TData, TValue>({
               </div>
             ) : (
               <div className="space-y-3">
-                <ValueFilter column={column} data={data} />
+                <ValueFilter column={column} data={data} table={table} />
                 <Divider className="my-2" />
                 <Button
                   size="small"
