@@ -9,6 +9,7 @@ Cotable, React ve TypeScript ile geliştirilmiş, TanStack Table ve Ant Design t
   - Metin Arama Filtresi (searchFilter)
   - Sayısal Aralık Filtresi (numberRange)
   - Özel Seçim Filtresi (multipleChoiceFilter)
+  - İç İçe Obje Filtresi (Nested Object Support)
 - 📊 Akıllı Sıralama
 - 📑 Gelişmiş Sayfalama
   - Sayfa Başına Kayıt Sayısı Seçimi
@@ -34,37 +35,50 @@ import { Cotable } from 'cotable';
 
 // Tablo verisi
 const data = [
-  { id: 1, name: 'Ahmet', age: 25, city: 'İstanbul' },
+  { 
+    id: 1, 
+    customer: {
+      title: 'ABC Ltd.',
+      contact: {
+        name: 'Ahmet',
+        phone: '555-0101'
+      }
+    },
+    age: 25, 
+    city: 'İstanbul' 
+  },
   // ...
 ];
 
 // Sütun tanımlamaları
 const columns = [
   {
-    accessorKey: 'name',
-    header: 'İsim',
+    // İç içe obje erişimi için nokta notasyonu kullanımı
+    accessorKey: 'customer.title',
+    header: 'Müşteri Adı',
     meta: {
-      isSearchFilter: true // Metin araması için
+      isSearchFilter: true
+    }
+  },
+  {
+    // Daha derin iç içe obje erişimi
+    accessorKey: 'customer.contact.name',
+    header: 'İletişim Kişisi',
+    meta: {
+      isSearchFilter: true
     }
   },
   {
     accessorKey: 'age',
     header: 'Yaş',
     meta: {
-      isNumberRange: true // Sayısal aralık filtresi için
-    }
-  },
-  {
-    accessorKey: 'tags',
-    header: 'Etiketler',
-    meta: {
-      isMultipleChoiceFilter: true // Çoklu seçim filtresi için
+      isNumberRange: true
     }
   },
   {
     accessorKey: 'city',
     header: 'Şehir',
-    enableColumnFilter: true // Standart çoklu seçim filtresi için
+    enableColumnFilter: true
   }
 ];
 
@@ -89,18 +103,21 @@ function App() {
 - Büyük/küçük harf duyarsız arama
 - Otomatik temizleme butonu
 - Prefix olarak arama ikonu
+- İç içe objelerde arama desteği
 
 ### 2. Sayısal Aralık Filtresi (numberRange)
 - Minimum ve maksimum değer girişi
 - Tek yönlü filtreleme imkanı (sadece min veya sadece max)
 - Sayısal değer kontrolü
 - InputNumber bileşeni ile kolay giriş
+- Nested sayısal değerlerde filtreleme
 
 ### 3. Çoklu Seçim Filtresi (multipleChoiceFilter)
 - Virgülle ayrılmış değerleri otomatik seçeneklere dönüştürme
 - Çoklu seçim yapabilme
 - Checkbox grubu ile kolay seçim
 - Otomatik değer ayrıştırma
+- İç içe obje değerlerinde çoklu seçim
 
 ### 4. Standart Çoklu Seçim Filtresi (multiSelect)
 - Benzersiz değerlerden otomatik seçenek oluşturma
@@ -108,6 +125,7 @@ function App() {
 - Seçenekler arasında anlık arama
 - Kaydırılabilir liste görünümü
 - Seçenek bulunamadığında özel mesaj
+- Nested obje değerlerinde filtreleme
 
 ## Props
 
@@ -141,6 +159,12 @@ function App() {
 - Hover efektleri
 - Responsive tasarım
 - Ant Design tema desteği
+
+### Nested Obje Erişimi
+- Nokta notasyonu ile sınırsız derinlikte obje erişimi
+- Otomatik değer çözümleme
+- Null-safe erişim
+- Undefined kontrolü
 
 ## Geliştirme
 

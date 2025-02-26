@@ -15,11 +15,25 @@ import {
   HeaderContext,
   Header,
 } from '@tanstack/react-table';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Table, ConfigProvider, Button, Space, Input, InputNumber, Card, Divider, Checkbox, Empty } from 'antd';
 import { FilterOutlined, ClearOutlined, SearchOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import trTR from 'antd/locale/tr_TR';
+import debounce from 'lodash/debounce';
+
+// Nested objeyi düzleştirme fonksiyonu
+const flattenObject = (obj: Record<string, any>, prefix = ''): Record<string, any> => {
+  return Object.keys(obj).reduce((acc: Record<string, any>, key: string) => {
+    const propName = prefix ? `${prefix}.${key}` : key;
+    if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+      Object.assign(acc, flattenObject(obj[key], propName));
+    } else {
+      acc[propName] = obj[key];
+    }
+    return acc;
+  }, {});
+};
 
 declare module '@tanstack/table-core' {
   interface ColumnMeta<TData extends unknown, TValue> {
@@ -117,7 +131,8 @@ export interface CotableProps<TData, TValue> {
   className?: string;
   /** Filtre stili ('popover' | 'inline') */
   filterStyle?: 'popover' | 'inline';
-  /** Tablo başlığı */
+  /** Global arama özelliğinin gösterilip gösterilmeyeceği */
+  showGlobalSearch?: boolean;
 }
 
 function ValueFilter({ column, data }: { column: Column<any, unknown>, data: any[] }) {
@@ -126,7 +141,8 @@ function ValueFilter({ column, data }: { column: Column<any, unknown>, data: any
   const uniqueValues = useMemo(() => {
     const values = new Set<string>();
     data.forEach(row => {
-      const value = row[column.id];
+      const flattenedRow = flattenObject(row as Record<string, any>);
+      const value = flattenedRow[column.id];
       if (value !== null && value !== undefined) {
         values.add(value.toString());
       }
@@ -265,7 +281,8 @@ function MultipleChoiceFilter({ column, data }: { column: Column<any, unknown>, 
   const options = useMemo(() => {
     const uniqueOptions = new Set<string>();
     data.forEach(row => {
-      const value = row[column.id];
+      const flattenedRow = flattenObject(row as Record<string, any>);
+      const value = flattenedRow[column.id];
       if (value !== null && value !== undefined) {
         value.toString().split(',').forEach((option: string) => 
           uniqueOptions.add(option.trim())
@@ -292,6 +309,20 @@ function MultipleChoiceFilter({ column, data }: { column: Column<any, unknown>, 
   );
 }
 
+// Türkçe karakterleri normalize etme fonksiyonu
+const normalizeText = (text: string): string => {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[ıİ]/g, 'i')
+    .replace(/[şŞ]/g, 's')
+    .replace(/[ğĞ]/g, 'g')
+    .replace(/[üÜ]/g, 'u')
+    .replace(/[öÖ]/g, 'o')
+    .replace(/[çÇ]/g, 'c');
+};
+
 export function Cotable<TData, TValue>({
   columns,
   data,
@@ -299,13 +330,46 @@ export function Cotable<TData, TValue>({
   showPagination = true,
   className = '',
   filterStyle = 'inline',
+  showGlobalSearch = true,
 }: CotableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [showAllFilters, setShowAllFilters] = useState(false);
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [filteredData, setFilteredData] = useState<TData[]>(data);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const debouncedSearch = useCallback(
+    debounce((searchTerm: string) => {
+      if (!searchTerm) {
+        setFilteredData(data);
+        return;
+      }
+
+      const normalizedSearch = normalizeText(searchTerm);
+      const filtered = data.filter((item) => {
+        const flattenedItem = flattenObject(item as Record<string, any>);
+        return Object.values(flattenedItem).some(
+          (value) => 
+            value !== null && 
+            value !== undefined && 
+            normalizeText(value.toString()).includes(normalizedSearch)
+        );
+      });
+      setFilteredData(filtered);
+    }, 300),
+    [data]
+  );
+
+  const handleGlobalSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setGlobalFilter(value);
+    debouncedSearch(value);
+  };
 
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns: columns.map(column => ({
       ...column,
       filterFn: column.meta?.isNumberRange
@@ -325,6 +389,10 @@ export function Cotable<TData, TValue>({
     state: {
       sorting,
       columnFilters,
+      pagination: {
+        pageIndex: currentPage - 1,
+        pageSize: pageSize,
+      },
     },
     filterFns: {
       numberRange: numberRangeFilter,
@@ -340,26 +408,33 @@ export function Cotable<TData, TValue>({
         const value = row.getValue(columnId);
         if (!filterValue) return true;
         if (value === null || value === undefined) return false;
-        return value.toString().toLowerCase().includes(filterValue.toLowerCase());
+        return normalizeText(value.toString()).includes(normalizeText(filterValue));
       },
       multipleChoiceFilter: (row: Row<any>, columnId: string, filterValue: string[]) => {
         const value = row.getValue(columnId);
         if (!Array.isArray(filterValue)) return true;
         if (filterValue.length === 0) return true;
         if (value === null || value === undefined) return false;
+        const normalizedValue = normalizeText(value.toString());
         return filterValue.some(filter => 
-          value.toString().toLowerCase().includes(filter.toLowerCase())
+          normalizedValue.includes(normalizeText(filter))
         );
       },
     },
   });
+
+  const antData = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredData.slice(startIndex, endIndex);
+  }, [filteredData, currentPage, pageSize]);
 
   const antColumns = table.getAllColumns().map((column) => {
     const header = table.getHeaderGroups()
       .flatMap(group => group.headers)
       .find(h => h.column.id === column.id);
 
-    const columnConfig = {
+    const columnConfig: any = {
       title: typeof column.columnDef.header === 'string'
         ? column.columnDef.header
         : header
@@ -375,30 +450,31 @@ export function Cotable<TData, TValue>({
       sorter: column.getCanSort(),
       render: (text: any, record: any) => {
         const cell = column.columnDef.cell;
+        const row = table.getRowModel().rows.find(r => r.original === record);
+        if (!row) return null;
+
         if (typeof cell === 'function') {
-          const row = table.getRowModel().rows.find(r => r.original === record) || table.getRowModel().rows[0];
-          const context: CellContext<TData, unknown> = {
+          return flexRender(cell, {
             table,
-            column,
             row,
-            getValue: () => text,
-            renderValue: () => text,
+            column,
+            getValue: () => row.getValue(column.id),
+            renderValue: () => row.getValue(column.id),
             cell: {
               id: `${row.id}_${column.id}`,
-              getValue: () => text,
+              getValue: () => row.getValue(column.id),
               row,
               column,
-              getContext: () => context,
-              renderValue: () => text,
+              getContext: () => ({}),
+              renderValue: () => row.getValue(column.id),
               getIsAggregated: () => false,
               getIsGrouped: () => false,
               getIsPlaceholder: () => false,
-            },
-          };
-          return flexRender(cell, context);
+            }
+          } as CellContext<TData, unknown>);
         }
-        return text;
-      },
+        return row.getValue(column.id);
+      }
     };
 
     if (showFilters && column.getCanFilter()) {
@@ -484,46 +560,66 @@ export function Cotable<TData, TValue>({
     return columnConfig;
   });
 
-  const antData = table.getRowModel().rows.map((row, index) => ({
-    key: index,
-    ...row.original,
-  }));
-
   const tableProps: TableProps<any> = {
     columns: antColumns,
     dataSource: antData,
     title: () => (
-      <Space className="w-full justify-end">
-        {showFilters && (
-          <>
-          
-            {columnFilters.length > 0 && (
-              <Button
-                icon={<ClearOutlined />}
-                onClick={() => {
-                  table.resetColumnFilters();
-                  setShowAllFilters(false);
-                }}
-                danger
-              >
-                Filtreleri Temizle
-              </Button>
-            )}
-          </>
+      <Space className="w-full justify-between">
+        {showGlobalSearch && (
+          <Input
+            placeholder="Tüm alanlarda ara..."
+            prefix={<SearchOutlined />}
+            value={globalFilter}
+            onChange={handleGlobalSearch}
+            allowClear
+            className="w-72"
+          />
         )}
+        <Space>
+          {showFilters && (
+            <>
+              {columnFilters.length > 0 && (
+                <Button
+                  icon={<ClearOutlined />}
+                  onClick={() => {
+                    table.resetColumnFilters();
+                    setShowAllFilters(false);
+                  }}
+                  danger
+                >
+                  Filtreleri Temizle
+                </Button>
+              )}
+            </>
+          )}
+        </Space>
       </Space>
     ),
     pagination: showPagination ? {
-      total: data.length,
-      pageSize: table.getState().pagination.pageSize,
-      current: table.getState().pagination.pageIndex + 1,
+      total: filteredData.length,
+      pageSize: pageSize,
+      current: currentPage,
       showSizeChanger: true,
       showTotal: (total, range) => `${range[0]}-${range[1]} / ${total} kayıt`,
       pageSizeOptions: ['10', '20', '30', '40', '50'],
-      onChange: (page, pageSize) => {
+      onChange: (page, size) => {
+        setCurrentPage(page);
+        setPageSize(size);
         table.setPageIndex(page - 1);
-        table.setPageSize(pageSize);
+        table.setPageSize(size);
       },
+      locale: {
+        items_per_page: '/ sayfa',
+        jump_to: 'Git',
+        jump_to_confirm: 'onayla',
+        page: 'Sayfa',
+        prev_page: 'Önceki Sayfa',
+        next_page: 'Sonraki Sayfa',
+        prev_5: 'Önceki 5 Sayfa',
+        next_5: 'Sonraki 5 Sayfa',
+        prev_3: 'Önceki 3 Sayfa',
+        next_3: 'Sonraki 3 Sayfa'
+      }
     } : false,
     onChange: (pagination, filters, sorter: any) => {
       if (Array.isArray(sorter)) {
