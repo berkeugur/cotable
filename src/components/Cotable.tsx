@@ -22,30 +22,16 @@ import type { TableProps } from 'antd';
 import trTR from 'antd/locale/tr_TR';
 import debounce from 'lodash/debounce';
 import React from 'react';
+import { flattenObject } from './functions/flatten-object.function';
 
-// Nested objeyi düzleştirme fonksiyonu
-const flattenObject = (obj: Record<string, any>, prefix = ''): Record<string, any> => {
-  if (!obj || typeof obj !== 'object') return {};
 
-  return Object.keys(obj).reduce((acc: Record<string, any>, key: string) => {
-    const propName = prefix ? `${prefix}.${key}` : key;
-    
-    if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
-      const nested = flattenObject(obj[key], propName);
-      Object.assign(acc, nested);
-    } else {
-      acc[propName] = obj[key];
-    }
-    
-    return acc;
-  }, {});
-};
 
 declare module '@tanstack/table-core' {
   interface ColumnMeta<TData extends unknown, TValue> {
     isNumberRange?: boolean;
     isSearchFilter?: boolean;
     isMultipleChoiceFilter?: boolean;
+    width?: number | string;
   }
 
   interface FilterFns {
@@ -278,6 +264,52 @@ function ValueFilter({ column, data, table }: { column: Column<any, unknown>, da
           }
           .ant-checkbox-wrapper span:last-child {
             padding-right: 8px;
+          }
+          .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-height: 40px;
+            line-height: 20px;
+            word-break: break-word;
+            position: relative;
+            padding: 0;
+            margin: 0;
+          }
+          .hover\:line-clamp-none:hover {
+            -webkit-line-clamp: unset;
+            overflow: visible;
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 8px;
+            border-radius: 4px;
+            max-height: none;
+            min-width: 100%;
+            white-space: pre-wrap;
+            left: 0;
+            top: 0;
+            transform: translateY(-4px);
+          }
+          .ant-table-cell {
+            position: relative;
+            vertical-align: top !important;
+            padding: 8px !important;
+            max-width: 300px;
+            height: 56px; /* 2 satır + padding */
+            overflow: visible !important;
+          }
+          .ant-table-cell > div {
+            position: relative;
+            height: 100%;
+            display: flex;
+            align-items: flex-start;
+          }
+          .ant-table-cell .ant-space {
+            flex-wrap: nowrap;
           }
         `}
       </style>
@@ -672,6 +704,8 @@ export function Cotable<TData, TValue>({
       dataIndex: column.id,
       key: column.id,
       sorter: column.getCanSort(),
+      width: column.columnDef.meta?.width,
+      ellipsis: true,
       render: (text: any, record: any) => {
         const cell = column.columnDef.cell;
         const value = column.id.includes('.')
@@ -706,18 +740,60 @@ export function Cotable<TData, TValue>({
             }
           } as unknown as CellContext<TData, unknown>;
 
-          return flexRender(cell, {
+          const renderedContent = flexRender(cell, {
             ...cellContext,
             table: {
               ...table,
               options: {
                 ...table.options,
-               
               },
             },
           });
+
+          // İşlem butonları veya özel bileşenler için sınırlama uygulamıyoruz
+          if (column.id === 'actions' || (React.isValidElement(renderedContent) && renderedContent.type !== 'div' && renderedContent.type !== 'span')) {
+            return renderedContent;
+          }
+
+          // React elementi ise ve children'ı varsa
+          if (React.isValidElement(renderedContent) && 
+              renderedContent.props && 
+              typeof renderedContent.props === 'object' && 
+              'children' in renderedContent.props) {
+            const children = renderedContent.props.children;
+            return (
+              <div 
+                title={typeof children === 'string' ? children : undefined} 
+                className="line-clamp-2 hover:line-clamp-none cursor-help"
+                style={{ minHeight: '20px' }}
+              >
+                {renderedContent}
+              </div>
+            );
+          }
+
+          // Düz metin veya diğer içerik türleri için
+          return (
+            <div 
+              title={renderedContent?.toString()} 
+              className="line-clamp-2 hover:line-clamp-none cursor-help"
+              style={{ minHeight: '20px' }}
+            >
+              {renderedContent}
+            </div>
+          );
         }
-        return value;
+
+        // Direkt değer gösterimi için
+        return (
+          <div 
+            title={value?.toString()} 
+            className="line-clamp-2 hover:line-clamp-none cursor-help"
+            style={{ minHeight: '20px' }}
+          >
+            {value}
+          </div>
+        );
       }
     };
 
