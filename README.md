@@ -10,12 +10,23 @@ Cotable, React ve TypeScript ile geliştirilmiş, TanStack Table ve Ant Design t
   - Sayısal Aralık Filtresi (numberRange)
   - Özel Seçim Filtresi (multipleChoiceFilter)
   - İç İçe Obje Filtresi (Nested Object Support)
+- 🔎 Genel Arama
+  - Tüm alanlarda anlık arama
+  - Debounce optimizasyonu
+  - Türkçe karakter desteği
+  - Büyük/küçük harf duyarsız
+  - İç içe objelerde arama
 - 📊 Akıllı Sıralama
 - 📑 Gelişmiş Sayfalama
   - Sayfa Başına Kayıt Sayısı Seçimi
   - Toplam Kayıt Gösterimi
+  - Türkçe Sayfalama Metinleri
+  - Sayfa Boyutu Değiştirme
 - 🎨 Ant Design Tema Desteği
 - 🌍 Türkçe Dil Desteği
+  - Tüm metinler Türkçe
+  - Türkçe karakter normalizasyonu
+  - Türkçe tarih formatı
 - 💪 TypeScript ile Tam Tip Güvenliği
 - 🔄 Otomatik Filtre Tipi Belirleme
 - 🧹 Toplu Filtre Temizleme
@@ -137,6 +148,7 @@ function App() {
 | showPagination | `boolean` | `true` | Sayfalama özelliğinin gösterilip gösterilmeyeceği |
 | className | `string` | `''` | Ek CSS sınıfları |
 | filterStyle | `'popover' \| 'inline'` | `'inline'` | Filtre stili |
+| showGlobalSearch | `boolean` | `true` | Genel arama özelliğinin gösterilip gösterilmeyeceği |
 
 ## Sütun Meta Özellikleri
 
