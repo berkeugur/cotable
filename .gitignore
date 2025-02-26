@@ -12,6 +12,8 @@ coverage
 dist
 build
 
+.next
+
 # misc
 .DS_Store
 *.pem
