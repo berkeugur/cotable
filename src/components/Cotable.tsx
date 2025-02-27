@@ -427,136 +427,11 @@ export function Cotable<TData, TValue>({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [showAllFilters, setShowAllFilters] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [filteredData, setFilteredData] = useState<TData[]>(data);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Data değiştiğinde filteredData'yı güncelle
-  useEffect(() => {
-    if (!globalFilter) {
-      setFilteredData(data);
-      setCurrentPage(1);
-      return;
-    }
-
-    const normalizedSearch = normalizeText(globalFilter);
-    const filtered = data.filter((item) => {
-      const flattenedItem = flattenObject(item as Record<string, any>);
-      return Object.entries(flattenedItem).some(([key, value]) => {
-        if (value === null || value === undefined) return false;
-        if (typeof value === 'object') {
-          const nestedStr = JSON.stringify(value);
-          return normalizeText(nestedStr).includes(normalizedSearch);
-        }
-        return normalizeText(value.toString()).includes(normalizedSearch);
-      });
-    });
-
-    setFilteredData(filtered);
-    setCurrentPage(1);
-  }, [data, globalFilter]);
-
-  const debouncedSearch = useCallback(
-    debounce((searchTerm: string) => {
-      if (!searchTerm) {
-        setFilteredData(data);
-        setCurrentPage(1);
-        return;
-      }
-
-      const normalizedSearch = normalizeText(searchTerm);
-      const filtered = data.filter((item) => {
-        const flattenedItem = flattenObject(item as Record<string, any>);
-        return Object.entries(flattenedItem).some(([key, value]) => {
-          if (value === null || value === undefined) return false;
-          if (typeof value === 'object') {
-            const nestedStr = JSON.stringify(value);
-            return normalizeText(nestedStr).includes(normalizedSearch);
-          }
-          return normalizeText(value.toString()).includes(normalizedSearch);
-        });
-      });
-
-      setFilteredData(filtered);
-      setCurrentPage(1);
-    }, 300),
-    [data]
-  );
-
-  // Kolon filtreleri değiştiğinde filtrelenmiş verileri güncelle
-  useEffect(() => {
-    let newFilteredData = data;
-
-    // Her bir kolon filtresi için filtreleme uygula
-    columnFilters.forEach(filter => {
-      const column = table.getColumn(filter.id);
-      if (!column) return;
-
-      newFilteredData = newFilteredData.filter(item => {
-        const value = filter.id.includes('.')
-          ? filter.id.split('.').reduce((obj: any, key: string) => obj?.[key], item)
-          : (item as any)[filter.id];
-
-        if (value === null || value === undefined || value === '') return false;
-
-        const filterFn = column.getFilterFn();
-        if (!filterFn) return true;
-
-        const row = {
-          id: (item as any).id?.toString() || Math.random().toString(36).substr(2, 9),
-          index: 0,
-          original: item,
-          depth: 0,
-          getValue: () => value,
-          getUniqueValues: () => new Set(),
-          renderValue: () => value,
-          subRows: [],
-          getParentRow: () => null,
-          getLeafRows: () => [],
-          originalSubRows: [],
-          getAllCells: () => [],
-          getIsSelected: () => false,
-          getIsGrouped: () => false,
-          getCanExpand: () => false,
-          getIsExpanded: () => false,
-          toggleExpanded: () => {},
-          getVisibleCells: () => [],
-          _getAllVisibleCells: () => [],
-          getCenterVisibleCells: () => [],
-          getLeftVisibleCells: () => [],
-          getRightVisibleCells: () => [],
-          getParentRows: () => [],
-          getCanPin: () => false,
-          getIsPinned: () => false,
-          getPinnedIndex: () => 0,
-          getIsAllParentsExpanded: () => true,
-          getIsFirstChild: () => false,
-          getIsLastChild: () => false,
-          getPrePinnedIndex: () => 0,
-          getPostPinnedIndex: () => 0,
-          getIsAllParentsFolded: () => false,
-          getIsFolded: () => false,
-          toggleFolded: () => {},
-          getIsAllParentsFiltered: () => false,
-          getIsFiltered: () => false,
-          _getAllVisibleCellsById: () => ({})
-        } as unknown as Row<any>;
-
-        return filterFn(
-          row,
-          filter.id,
-          filter.value,
-          () => {}
-        );
-      });
-    });
-
-    setFilteredData(newFilteredData);
-    setCurrentPage(1);
-  }, [columnFilters, data]);
-
   const table = useReactTable({
-    data: filteredData,
+    data,
     columns: columns.map(column => ({
       ...column,
       filterFn: column.meta?.isNumberRange
@@ -673,6 +548,109 @@ export function Cotable<TData, TValue>({
     },
   });
 
+  const filteredData = useMemo(() => {
+    let result = data;
+
+    // Global filtre uygula
+    if (globalFilter) {
+      const normalizedSearch = normalizeText(globalFilter);
+      result = result.filter((item) => {
+        const flattenedItem = flattenObject(item as Record<string, any>);
+        return Object.entries(flattenedItem).some(([key, value]) => {
+          if (value === null || value === undefined) return false;
+          if (typeof value === 'object') {
+            const nestedStr = JSON.stringify(value);
+            return normalizeText(nestedStr).includes(normalizedSearch);
+          }
+          return normalizeText(value.toString()).includes(normalizedSearch);
+        });
+      });
+    }
+
+    // Kolon filtrelerini uygula
+    columnFilters.forEach(filter => {
+      const column = table.getColumn(filter.id);
+      if (!column) return;
+
+      result = result.filter(item => {
+        const value = filter.id.includes('.')
+          ? filter.id.split('.').reduce((obj: any, key: string) => obj?.[key], item)
+          : (item as any)[filter.id];
+
+        if (value === null || value === undefined || value === '') return false;
+
+        const filterFn = column.getFilterFn();
+        if (!filterFn) return true;
+
+        const row = {
+          getValue: () => value,
+          original: item,
+          id: (item as any).id?.toString() || Math.random().toString(36).substr(2, 9),
+          index: 0,
+          depth: 0,
+          renderValue: () => value,
+          subRows: [],
+          getParentRow: () => null,
+          getLeafRows: () => [],
+          originalSubRows: [],
+          getAllCells: () => [],
+          getIsSelected: () => false,
+          getIsGrouped: () => false,
+          getCanExpand: () => false,
+          getIsExpanded: () => false,
+          toggleExpanded: () => {},
+          getVisibleCells: () => [],
+          _getAllVisibleCells: () => [],
+          getCenterVisibleCells: () => [],
+          getLeftVisibleCells: () => [],
+          getRightVisibleCells: () => [],
+          getParentRows: () => [],
+          getCanPin: () => false,
+          getIsPinned: () => false,
+          getPinnedIndex: () => 0,
+          getIsAllParentsExpanded: () => true,
+          getIsFirstChild: () => false,
+          getIsLastChild: () => false,
+          getPrePinnedIndex: () => 0,
+          getPostPinnedIndex: () => 0,
+          getIsAllParentsFolded: () => false,
+          getIsFolded: () => false,
+          toggleFolded: () => {},
+          getIsAllParentsFiltered: () => false,
+          getIsFiltered: () => false,
+          _getAllVisibleCellsById: () => ({})
+        } as unknown as Row<any>;
+
+        return filterFn(
+          row,
+          filter.id,
+          filter.value,
+          () => {}
+        );
+      });
+    });
+
+    return result;
+  }, [data, globalFilter, columnFilters, table]);
+
+  // Kolon filtreleri veya global filtre değiştiğinde sayfa numarasını sıfırla
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [columnFilters, globalFilter]);
+
+  const debouncedSearch = useCallback(
+    debounce((searchTerm: string) => {
+      if (!searchTerm) {
+        setGlobalFilter(searchTerm);
+        return;
+      }
+
+      const normalizedSearch = normalizeText(searchTerm);
+      setGlobalFilter(normalizedSearch);
+    }, 300),
+    []
+  );
+
   const antData = useMemo(() => {
     return filteredData.map((item: any) => {
       const flattenedItem = flattenObject(item);
@@ -685,10 +663,10 @@ export function Cotable<TData, TValue>({
     });
   }, [filteredData]);
 
-  const antColumns = table.getAllColumns().map((column) => {
+  const antColumns = table.getAllColumns().map((column: any) => {
     const header = table.getHeaderGroups()
-      .flatMap(group => group.headers)
-      .find(h => h.column.id === column.id);
+      .flatMap((group: any) => group.headers)
+      .find((h: any) => h.column.id === column.id);
 
     const columnConfig: any = {
       title: typeof column.columnDef.header === 'string'
@@ -703,13 +681,37 @@ export function Cotable<TData, TValue>({
           : column.id,
       dataIndex: column.id,
       key: column.id,
-      sorter: column.getCanSort(),
+      sorter: column.getCanSort() ? (a: any, b: any) => {
+        const aValue = column.id.includes('.')
+          ? column.id.split('.').reduce((obj: any, key: string) => obj?.[key], a.original)
+          : a[column.id];
+        const bValue = column.id.includes('.')
+          ? column.id.split('.').reduce((obj: any, key: string) => obj?.[key], b.original)
+          : b[column.id];
+
+        // Sayısal değerler için
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return aValue - bValue;
+        }
+
+        // String değerler için (Türkçe karakter desteği ile)
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return aValue.localeCompare(bValue, 'tr-TR');
+        }
+
+        // Null/undefined kontrolü
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
+
+        // Diğer tipler için varsayılan karşılaştırma
+        return String(aValue).localeCompare(String(bValue), 'tr-TR');
+      } : false,
       width: column.columnDef.meta?.width,
       ellipsis: true,
       render: (text: any, record: any) => {
         const cell = column.columnDef.cell;
         const value = column.id.includes('.')
-          ? column.id.split('.').reduce((obj, key) => obj?.[key], record.original)
+          ? column.id.split('.').reduce((obj: any, key: string) => obj?.[key], record.original)
           : record[column.id];
         
         if (typeof cell === 'function') {
